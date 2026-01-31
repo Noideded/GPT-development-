@@ -1,1 +1,1117 @@
-
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": [],
+      "authorship_tag": "ABX9TyPLhZ2QtaCRmz7n27ZoG1tV",
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/Noideded/GPT-development-/blob/main/GPT%20development\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "i3BxFXpBsGp4",
+        "outputId": "3e6fac25-79cc-4e34-a233-3639610288b8"
+      },
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Mounted at /content/gdrive\n"
+          ]
+        }
+      ],
+      "source": [
+        "from google.colab import drive\n",
+        "drive.mount('/content/gdrive', force_remount=True)"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install torchinfo"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "AqDZaTS-4HUM",
+        "outputId": "fe308ef9-64f6-4271-fb4b-3a04f5a32e68"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Collecting torchinfo\n",
+            "  Downloading torchinfo-1.8.0-py3-none-any.whl.metadata (21 kB)\n",
+            "Downloading torchinfo-1.8.0-py3-none-any.whl (23 kB)\n",
+            "Installing collected packages: torchinfo\n",
+            "Successfully installed torchinfo-1.8.0\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import torch\n",
+        "import torch.nn as nn\n",
+        "from torch.nn import functional as F\n",
+        "import requests\n",
+        "import os\n",
+        "from tqdm import tqdm"
+      ],
+      "metadata": {
+        "id": "2vRT25nB4LYn"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "batch_size = 32\n",
+        "block_size = 256\n",
+        "max_iters = 5000\n",
+        "eval_interval = 500\n",
+        "learning_rate = 1e-3\n",
+        "device = 'cuda' if torch.cuda.is_available() else 'cpu'\n",
+        "eval_iters = 200\n",
+        "n_embd = 384\n",
+        "n_head = 6\n",
+        "n_layer = 6\n",
+        "dropout = 0.1\n",
+        "\n",
+        "torch.manual_seed(42)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "NOWVZX-J7b_e",
+        "outputId": "c6947b39-a0ea-43bb-db1b-667f33e7523d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "<torch._C.Generator at 0x7a57e8be3930>"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 4
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pip install kaggle\n",
+        "\n",
+        "from google.colab import files\n",
+        "uploaded = files.upload()\n",
+        "\n",
+        "!mkdir -p ~/.kaggle\n",
+        "!mv kaggle.json ~/.kaggle/\n",
+        "!chmod 600 ~/.kaggle/kaggle.jsons\n",
+        "\n",
+        "!kaggle datasets download -d convolutionalnn/kanye-west-lyrics-dataset"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 475
+        },
+        "id": "KE-KfYpIubHo",
+        "outputId": "1e9c3b21-e07e-44a1-b63f-33d4a69b4bb1"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Requirement already satisfied: kaggle in /usr/local/lib/python3.12/dist-packages (1.7.4.5)\n",
+            "Requirement already satisfied: bleach in /usr/local/lib/python3.12/dist-packages (from kaggle) (6.3.0)\n",
+            "Requirement already satisfied: certifi>=14.05.14 in /usr/local/lib/python3.12/dist-packages (from kaggle) (2025.10.5)\n",
+            "Requirement already satisfied: charset-normalizer in /usr/local/lib/python3.12/dist-packages (from kaggle) (3.4.4)\n",
+            "Requirement already satisfied: idna in /usr/local/lib/python3.12/dist-packages (from kaggle) (3.11)\n",
+            "Requirement already satisfied: protobuf in /usr/local/lib/python3.12/dist-packages (from kaggle) (5.29.5)\n",
+            "Requirement already satisfied: python-dateutil>=2.5.3 in /usr/local/lib/python3.12/dist-packages (from kaggle) (2.9.0.post0)\n",
+            "Requirement already satisfied: python-slugify in /usr/local/lib/python3.12/dist-packages (from kaggle) (8.0.4)\n",
+            "Requirement already satisfied: requests in /usr/local/lib/python3.12/dist-packages (from kaggle) (2.32.4)\n",
+            "Requirement already satisfied: setuptools>=21.0.0 in /usr/local/lib/python3.12/dist-packages (from kaggle) (75.2.0)\n",
+            "Requirement already satisfied: six>=1.10 in /usr/local/lib/python3.12/dist-packages (from kaggle) (1.17.0)\n",
+            "Requirement already satisfied: text-unidecode in /usr/local/lib/python3.12/dist-packages (from kaggle) (1.3)\n",
+            "Requirement already satisfied: tqdm in /usr/local/lib/python3.12/dist-packages (from kaggle) (4.67.1)\n",
+            "Requirement already satisfied: urllib3>=1.15.1 in /usr/local/lib/python3.12/dist-packages (from kaggle) (2.5.0)\n",
+            "Requirement already satisfied: webencodings in /usr/local/lib/python3.12/dist-packages (from kaggle) (0.5.1)\n"
+          ]
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "     <input type=\"file\" id=\"files-f37eb1ea-924a-441e-ad36-4c06fde3467b\" name=\"files[]\" multiple disabled\n",
+              "        style=\"border:none\" />\n",
+              "     <output id=\"result-f37eb1ea-924a-441e-ad36-4c06fde3467b\">\n",
+              "      Upload widget is only available when the cell has been executed in the\n",
+              "      current browser session. Please rerun this cell to enable.\n",
+              "      </output>\n",
+              "      <script>// Copyright 2017 Google LLC\n",
+              "//\n",
+              "// Licensed under the Apache License, Version 2.0 (the \"License\");\n",
+              "// you may not use this file except in compliance with the License.\n",
+              "// You may obtain a copy of the License at\n",
+              "//\n",
+              "//      http://www.apache.org/licenses/LICENSE-2.0\n",
+              "//\n",
+              "// Unless required by applicable law or agreed to in writing, software\n",
+              "// distributed under the License is distributed on an \"AS IS\" BASIS,\n",
+              "// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n",
+              "// See the License for the specific language governing permissions and\n",
+              "// limitations under the License.\n",
+              "\n",
+              "/**\n",
+              " * @fileoverview Helpers for google.colab Python module.\n",
+              " */\n",
+              "(function(scope) {\n",
+              "function span(text, styleAttributes = {}) {\n",
+              "  const element = document.createElement('span');\n",
+              "  element.textContent = text;\n",
+              "  for (const key of Object.keys(styleAttributes)) {\n",
+              "    element.style[key] = styleAttributes[key];\n",
+              "  }\n",
+              "  return element;\n",
+              "}\n",
+              "\n",
+              "// Max number of bytes which will be uploaded at a time.\n",
+              "const MAX_PAYLOAD_SIZE = 100 * 1024;\n",
+              "\n",
+              "function _uploadFiles(inputId, outputId) {\n",
+              "  const steps = uploadFilesStep(inputId, outputId);\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  // Cache steps on the outputElement to make it available for the next call\n",
+              "  // to uploadFilesContinue from Python.\n",
+              "  outputElement.steps = steps;\n",
+              "\n",
+              "  return _uploadFilesContinue(outputId);\n",
+              "}\n",
+              "\n",
+              "// This is roughly an async generator (not supported in the browser yet),\n",
+              "// where there are multiple asynchronous steps and the Python side is going\n",
+              "// to poll for completion of each step.\n",
+              "// This uses a Promise to block the python side on completion of each step,\n",
+              "// then passes the result of the previous step as the input to the next step.\n",
+              "function _uploadFilesContinue(outputId) {\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  const steps = outputElement.steps;\n",
+              "\n",
+              "  const next = steps.next(outputElement.lastPromiseValue);\n",
+              "  return Promise.resolve(next.value.promise).then((value) => {\n",
+              "    // Cache the last promise value to make it available to the next\n",
+              "    // step of the generator.\n",
+              "    outputElement.lastPromiseValue = value;\n",
+              "    return next.value.response;\n",
+              "  });\n",
+              "}\n",
+              "\n",
+              "/**\n",
+              " * Generator function which is called between each async step of the upload\n",
+              " * process.\n",
+              " * @param {string} inputId Element ID of the input file picker element.\n",
+              " * @param {string} outputId Element ID of the output display.\n",
+              " * @return {!Iterable<!Object>} Iterable of next steps.\n",
+              " */\n",
+              "function* uploadFilesStep(inputId, outputId) {\n",
+              "  const inputElement = document.getElementById(inputId);\n",
+              "  inputElement.disabled = false;\n",
+              "\n",
+              "  const outputElement = document.getElementById(outputId);\n",
+              "  outputElement.innerHTML = '';\n",
+              "\n",
+              "  const pickedPromise = new Promise((resolve) => {\n",
+              "    inputElement.addEventListener('change', (e) => {\n",
+              "      resolve(e.target.files);\n",
+              "    });\n",
+              "  });\n",
+              "\n",
+              "  const cancel = document.createElement('button');\n",
+              "  inputElement.parentElement.appendChild(cancel);\n",
+              "  cancel.textContent = 'Cancel upload';\n",
+              "  const cancelPromise = new Promise((resolve) => {\n",
+              "    cancel.onclick = () => {\n",
+              "      resolve(null);\n",
+              "    };\n",
+              "  });\n",
+              "\n",
+              "  // Wait for the user to pick the files.\n",
+              "  const files = yield {\n",
+              "    promise: Promise.race([pickedPromise, cancelPromise]),\n",
+              "    response: {\n",
+              "      action: 'starting',\n",
+              "    }\n",
+              "  };\n",
+              "\n",
+              "  cancel.remove();\n",
+              "\n",
+              "  // Disable the input element since further picks are not allowed.\n",
+              "  inputElement.disabled = true;\n",
+              "\n",
+              "  if (!files) {\n",
+              "    return {\n",
+              "      response: {\n",
+              "        action: 'complete',\n",
+              "      }\n",
+              "    };\n",
+              "  }\n",
+              "\n",
+              "  for (const file of files) {\n",
+              "    const li = document.createElement('li');\n",
+              "    li.append(span(file.name, {fontWeight: 'bold'}));\n",
+              "    li.append(span(\n",
+              "        `(${file.type || 'n/a'}) - ${file.size} bytes, ` +\n",
+              "        `last modified: ${\n",
+              "            file.lastModifiedDate ? file.lastModifiedDate.toLocaleDateString() :\n",
+              "                                    'n/a'} - `));\n",
+              "    const percent = span('0% done');\n",
+              "    li.appendChild(percent);\n",
+              "\n",
+              "    outputElement.appendChild(li);\n",
+              "\n",
+              "    const fileDataPromise = new Promise((resolve) => {\n",
+              "      const reader = new FileReader();\n",
+              "      reader.onload = (e) => {\n",
+              "        resolve(e.target.result);\n",
+              "      };\n",
+              "      reader.readAsArrayBuffer(file);\n",
+              "    });\n",
+              "    // Wait for the data to be ready.\n",
+              "    let fileData = yield {\n",
+              "      promise: fileDataPromise,\n",
+              "      response: {\n",
+              "        action: 'continue',\n",
+              "      }\n",
+              "    };\n",
+              "\n",
+              "    // Use a chunked sending to avoid message size limits. See b/62115660.\n",
+              "    let position = 0;\n",
+              "    do {\n",
+              "      const length = Math.min(fileData.byteLength - position, MAX_PAYLOAD_SIZE);\n",
+              "      const chunk = new Uint8Array(fileData, position, length);\n",
+              "      position += length;\n",
+              "\n",
+              "      const base64 = btoa(String.fromCharCode.apply(null, chunk));\n",
+              "      yield {\n",
+              "        response: {\n",
+              "          action: 'append',\n",
+              "          file: file.name,\n",
+              "          data: base64,\n",
+              "        },\n",
+              "      };\n",
+              "\n",
+              "      let percentDone = fileData.byteLength === 0 ?\n",
+              "          100 :\n",
+              "          Math.round((position / fileData.byteLength) * 100);\n",
+              "      percent.textContent = `${percentDone}% done`;\n",
+              "\n",
+              "    } while (position < fileData.byteLength);\n",
+              "  }\n",
+              "\n",
+              "  // All done.\n",
+              "  yield {\n",
+              "    response: {\n",
+              "      action: 'complete',\n",
+              "    }\n",
+              "  };\n",
+              "}\n",
+              "\n",
+              "scope.google = scope.google || {};\n",
+              "scope.google.colab = scope.google.colab || {};\n",
+              "scope.google.colab._files = {\n",
+              "  _uploadFiles,\n",
+              "  _uploadFilesContinue,\n",
+              "};\n",
+              "})(self);\n",
+              "</script> "
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Saving kaggle.json to kaggle.json\n",
+            "chmod: cannot access '/root/.kaggle/kaggle.jsons': No such file or directory\n",
+            "Warning: Your Kaggle API key is readable by other users on this system! To fix this, you can run 'chmod 600 /root/.kaggle/kaggle.json'\n",
+            "Dataset URL: https://www.kaggle.com/datasets/convolutionalnn/kanye-west-lyrics-dataset\n",
+            "License(s): CC0-1.0\n",
+            "Downloading kanye-west-lyrics-dataset.zip to /content\n",
+            "  0% 0.00/115k [00:00<?, ?B/s]\n",
+            "100% 115k/115k [00:00<00:00, 284MB/s]\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!unzip kanye-west-lyrics-dataset.zip -d kanye_data/"
+      ],
+      "metadata": {
+        "id": "2uAIgjXQioye",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "ddcbe425-8b38-4b10-ede8-c318019507b8"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Archive:  kanye-west-lyrics-dataset.zip\n",
+            "  inflating: kanye_data/Kanye West Lyrics.txt  \n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "with open('/content/kanye_data/Kanye West Lyrics.txt', 'r', encoding = 'utf-8') as f:\n",
+        "  text = f.read()"
+      ],
+      "metadata": {
+        "id": "1v3620RXldU_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(\"Number of characters in the dataset: \", len(text))"
+      ],
+      "metadata": {
+        "id": "8Rzx7_z2nFNn",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "c08eac42-24bb-489e-ad77-dd19111269dc"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Number of characters in the dataset:  353441\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [],
+      "metadata": {
+        "id": "foIL9wjTjErr"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "chars = sorted(list(set(text)))\n",
+        "vocab_size = len(chars)\n",
+        "print(''.join(chars))\n",
+        "print(\"Number of unique characters in the dataset: \", vocab_size)"
+      ],
+      "metadata": {
+        "id": "V8PTX_F-jX6a",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "40a9cb19-3ef6-4260-eb00-1a5214911e59"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            " !\"#$&'()*+,-./0123456789:;?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyzÁáéñóöúāŐ–—‘’“”…⁠﻿\n",
+            "Number of unique characters in the dataset:  101\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "stoi = {ch:i for i, ch in enumerate(chars)}\n",
+        "itos = {i:ch for i, ch in enumerate(chars)}\n",
+        "encode = lambda s: [stoi[c] for c in s]\n",
+        "decode = lambda l: ''.join([itos[i] for i in l])\n",
+        "\n",
+        "print(encode(\"Wake up Mr West!\"))\n",
+        "print(decode(encode(\"Wake up Mr West!\")))"
+      ],
+      "metadata": {
+        "id": "ATG__EDikXFY",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "d4289d80-7aae-4160-f5a8-5af1fbb217bb"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "[51, 57, 67, 61, 1, 77, 72, 1, 41, 74, 1, 51, 61, 75, 76, 2]\n",
+            "Wake up Mr West!\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import torch\n",
+        "data = torch.tensor(encode(text), dtype = torch.long)\n",
+        "print(data.shape, data.dtype)"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "0Ems0l8grt-Q",
+        "outputId": "5bbd0f57-e697-49ee-d09a-142f35b3fdf9"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "torch.Size([353441]) torch.int64\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "n = int(0.9*len(data))\n",
+        "train_data = data[:n]\n",
+        "val_data = data[n:]"
+      ],
+      "metadata": {
+        "id": "bsEPLWDbruES"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "block_size = 8\n",
+        "train_data[:block_size+1]"
+      ],
+      "metadata": {
+        "id": "3XcMG5w-tcQV",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "68e64fe3-469a-4eda-e99d-b1ff4305cd88"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "tensor([100,  55,  31,  64,  71,  74,  77,  75,  56])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 17
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#xplanation for how block size flows\n",
+        "\"\"\"\n",
+        "x = train_data[:block_size] #identifies char\n",
+        "y = train_data[1:block_size+1] #what comes after char\n",
+        "for t in range(block_size):\n",
+        "  context = x[:t+1]\n",
+        "  target = y[t]\n",
+        "  print(f\"when input is {context} the target: {target}\")"
+      ],
+      "metadata": {
+        "id": "sikmphO3tlka"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "torch.manual_seed(42)\n",
+        "\n",
+        "def get_batch(split):\n",
+        "  data = train_data if split == 'train' else val_data\n",
+        "  ix = torch.randint(len(data) - block_size, (batch_size,))\n",
+        "  x = torch.stack([data[i:i+block_size] for i in ix])\n",
+        "  y = torch.stack([data[i+1:i+block_size+1] for i in ix])\n",
+        "  #x, y = x.to(device), y.to(device)\n",
+        "  return x, y\n",
+        "\n",
+        "@torch.no_grad()\n",
+        "def estimate_loss():\n",
+        "  out = ()\n",
+        "  model.eval()\n",
+        "  for split in ['train', 'val']:\n",
+        "    losses = torch.zeros(eval_iters)\n",
+        "    for k in range (eval_iters):\n",
+        "      X, Y = get_batch(split)\n",
+        "      logits, loss = model(X, Y)\n",
+        "      losses[k] = loss.item()\n",
+        "    out[split] = losses.mean()\n",
+        "  model.train()\n",
+        "  return out\n",
+        "\n",
+        "\n",
+        "\n",
+        "\"\"\"\n",
+        "xb, yb = get_batch('train')\n",
+        "print('inputs:')\n",
+        "print(xb.shape)\n",
+        "print(xb)\n",
+        "print('targets:')\n",
+        "print(yb.shape)\n",
+        "print(yb)\n",
+        "\n",
+        "print('----')\n",
+        "\n",
+        "for b in range(batch_size):\n",
+        "  for t in range(block_size):\n",
+        "    context = xb[b, :t+1]\n",
+        "    target = yb[b, t]\n",
+        "    print(f\"when input is {context.tolist()} the target: {target}\")\n",
+        "\"\"\""
+      ],
+      "metadata": {
+        "id": "oh0wSf1ptvuh",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 87
+        },
+        "outputId": "ec615498-11e4-4af5-a339-ba94b76beb82"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "'\\nxb, yb = get_batch(\\'train\\')\\nprint(\\'inputs:\\')\\nprint(xb.shape)\\nprint(xb)\\nprint(\\'targets:\\')\\nprint(yb.shape)\\nprint(yb)\\n\\nprint(\\'----\\')\\n\\nfor b in range(batch_size):\\n  for t in range(block_size):\\n    context = xb[b, :t+1]\\n    target = yb[b, t]\\n    print(f\"when input is {context.tolist()} the target: {target}\")\\n'"
+            ],
+            "application/vnd.google.colaboratory.intrinsic+json": {
+              "type": "string"
+            }
+          },
+          "metadata": {},
+          "execution_count": 18
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\"\"\"\n",
+        "print(xb)"
+      ],
+      "metadata": {
+        "id": "_OlPulTtrgqL",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "aade6884-c74d-462d-ee21-3c43749252c8"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "tensor([[38, 77, 70, 65, 61,  1, 41, 71],\n",
+            "        [ 1, 65, 76,  7, 75,  1, 68, 61],\n",
+            "        [65, 76,  1, 71, 77, 76,  0, 51],\n",
+            "        [72, 57, 63, 61,  1, 57, 70, 60]])\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "class Head(nn.Module):\n",
+        "  def __init__(self, head_size):\n",
+        "    super().__init__()\n",
+        "    self.key = nn.Linear(n_embd, head_size, bias = False)\n",
+        "    self.query = nn.Linear(n_embd, head_size, bias = False)\n",
+        "    self.value = nn.Linear(n_embd, head_size, bias = False)\n",
+        "    self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))\n",
+        "    self.dropout = nn.Dropout(dropout)\n",
+        "\n",
+        "  def forward(self, x):\n",
+        "    B, T, C = x.shape\n",
+        "    k = self.key(x)\n",
+        "    q = self.query(x)\n",
+        "    wei = q @ k.transpose(-2, -1)* C**-0.5\n",
+        "    wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))\n",
+        "    wei = F.softmax(wei, dim = -1)\n",
+        "    wei = self.dropout(wei)\n",
+        "    v = self.value(x)\n",
+        "    out = wei @ v\n",
+        "    return out\n",
+        "\n",
+        "    class MultiHeadAttention(nn.Module):\n",
+        "      def __init__(self, num_heads, head_size):\n",
+        "        super().__init__()\n",
+        "        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])\n",
+        "        self.proj = nn.Linear(n_embd, n_embd)\n",
+        "        self.dropout = nn.Dropout(dropout)\n",
+        "\n",
+        "      def forward(self, x):\n",
+        "        out = torch.cat([h(x) for h in self.heards], dim = -1)\n",
+        "        out = self.dropout(self.proj(out))\n",
+        "        return out\n",
+        "\n",
+        "    class FeedForward(nn.Module):\n",
+        "      def __init__(self, n_embd):\n",
+        "        super().__init__()\n",
+        "        self.net = nn.Sequential(\n",
+        "            nn.Linear(n.embd, 4 * n_embd),\n",
+        "            nn.ReLU(),\n",
+        "            nn.Linear(4 * n_embd, n_embd),\n",
+        "            nn.Dropout(dropout),\n",
+        "        )\n",
+        "\n",
+        "        def forward(self, x):\n",
+        "          return self.net(x)\n",
+        "\n",
+        "    class Block(nn.Module):\n",
+        "      def __init__(self, n_embd, n_head):\n",
+        "        super().__init__()\n",
+        "        head_size = n_embd // n_head\n",
+        "        self.sa = MultiHeadAttention(n_head, head_size)\n",
+        "        self.ffwd = FeedForward(n_embd)\n",
+        "        self.ln1 = nn.LayerNorm(n_embd)\n",
+        "        self.ln2 = nn.LayerNorm(n_embd)\n",
+        "\n",
+        "      def forward(self, x):\n",
+        "        x = x + self.sa(self.ln1(x))\n",
+        "        x = x + self.ffwd\n",
+        "        return x\n"
+      ],
+      "metadata": {
+        "id": "5R6mHMTN9wA6"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "torch.manual_seed(42)\n",
+        "\n",
+        "class BigramLanguageModel(nn.Module):\n",
+        "\n",
+        "  def __init__(self):\n",
+        "    super().__init__()\n",
+        "    self.token_embedding_table = nn.Embedding(vocab_size, n_embd)\n",
+        "    self.position_embedding_table = nn.Embedding(block_size, n_embd)\n",
+        "    self.blocks = nn.Sequential(*[\n",
+        "        Block(n_embd, n_head = n_head) for _ in range(n_layer)\n",
+        "    ])\n",
+        "    self.ln_f = nn.LayerNorm(n_embd)\n",
+        "\n",
+        "\n",
+        "  def forward(self, idx, targets = None):\n",
+        "\n",
+        "    logits = self.token_embedding_table(idx) #(batch, timing, vocab size)\n",
+        "\n",
+        "    if targets is None:\n",
+        "      loss = None\n",
+        "    else:\n",
+        "      # changes arrangments for logits, since pytorch expects one dimensional inputs\n",
+        "      B, T, C = logits.shape\n",
+        "      logits = logits.view(B*T, C)\n",
+        "      targets = targets.view(B*T)\n",
+        "      loss = F.cross_entropy(logits, targets)\n",
+        "\n",
+        "    return logits, loss\n",
+        "\n",
+        "  def generate(self, idx, max_new_tokens):\n",
+        "    #idx is (B, T) array indices in the current context\n",
+        "    for _ in range(max_new_tokens):\n",
+        "      #get the predictions\n",
+        "      logits, loss = self(idx)\n",
+        "      #focus only on the last time step\n",
+        "      logits = logits[:, -1, :] #becomes (B, C)\n",
+        "      #apply softmax to get probabilities\n",
+        "      probs = F.softmax(logits, dim = -1) #(B, C)\n",
+        "      # sample from the distributions\n",
+        "      idx_next = torch.multinomial(probs, num_samples = 1) #(B, 1)\n",
+        "      #multinomial takes the next sample after the target, which is why num_samples = 1\n",
+        "      #append sampled index to the running sequence\n",
+        "      idx = torch.cat((idx, idx_next), dim = 1) #(B, T+1)\n",
+        "    return idx\n",
+        "\n",
+        "m = BigramLanguageModel(vocab_size)\n",
+        "logits, loss = m(xb, yb)\n",
+        "print(logits.shape)\n",
+        "print(loss)\n",
+        "\n",
+        "print(decode(m.generate(idx = torch.zeros((1, 1), dtype = torch.long), max_new_tokens = 100)[0].tolist()))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "PeJCdw1B31r5",
+        "outputId": "c8e987b4-35f7-4126-f9fe-d11a0169752d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "torch.Size([32, 101])\n",
+            "tensor(5.1591, grad_fn=<NllLossBackward0>)\n",
+            "\n",
+            "Q’,ó!‘xSS4/vFpc.Bc)ö78āWDLCU﻿⁠0lH:;Ax’o (Na8/zy&,WEaL“ÁKE;!k9Bé[‘8w‘ŐKŐ1.IP0DLo‘:$iSs$[EkFs(,OTo$V#‘\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#create a pytorch optimizer\n",
+        "optimizer = torch.optim.Adam(m.parameters(), lr = 1e-3)"
+      ],
+      "metadata": {
+        "id": "4INhh8kF8onj"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "batch_size = 32\n",
+        "for steps in range(10000):\n",
+        "\n",
+        "  #sample a batch of data\n",
+        "  xb, yb = get_batch('train')\n",
+        "\n",
+        "  #evaluate the loss\n",
+        "  logits, loss = m(xb, yb)\n",
+        "  optimizer.zero_grad(set_to_none = True)\n",
+        "  loss.backward()\n",
+        "  optimizer.step()\n",
+        "\n",
+        "print(loss.item())"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dQT59pELsjiD",
+        "outputId": "480985ab-1157-4439-ea40-6c82c02d2ef9"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "2.5188348293304443\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "print(decode(m.generate(idx = torch.zeros((1, 1), dtype = torch.long), max_new_tokens = 500)[0].tolist()))"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "dl9j59eDt2v5",
+        "outputId": "d16c23a7-f146-481d-dd56-6e1c53e00221"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "\n",
+            "Lin, ke'serr\n",
+            "Siriz, sot work shinkifodonAn\n",
+            "Hived e they orye I'thigoay t'sisbu (EMaghe s Chore mird, ay]\n",
+            "Yotrep\n",
+            "\n",
+            "' s nne y Geve ngits*l uru n wn r t sitt PqEge I*Kyak t w ckhes\n",
+            "Whefiayon t deldite y, tho tont theathes, I 2: w d thait egg!7Yo, pond fulaKayaneneat ag, plw boathanas  ckeevesthy ox 'vinth\n",
+            "Gord, 'tht 32p-ucak t'd-haspstt'th, me a, bes st k t re tousove illleryllild-Therar\n",
+            "\n",
+            "Yen tctayondyofeVe hanyon e ngrin'rofau I, D'mDrl o: in my bas\n",
+            "I ' w, 1hit Ka s ti, ce bahe hocakere athe)\n",
+            "\n",
+            "[Ban\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "torch.manual_seed(42)\n",
+        "B,T,C = 4,8,2\n",
+        "x = torch.randn(B,T,C)\n",
+        "x.shape"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "zvD8IHQmDmxD",
+        "outputId": "3c65b729-abe4-4084-c7ac-dccd59aa8c57"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "torch.Size([4, 8, 2])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 18
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "#optional if one doesnt want to use matrix\n",
+        "\n",
+        "\"\"\"\n",
+        "xbow = torch.zeros((B,T,C))\n",
+        "for b in range(B):\n",
+        "  for t in range(T):\n",
+        "    xprev = x[b,:t+1] #(t,C)\n",
+        "    xbow[b,t] = torch.mean(xprev, 0)"
+      ],
+      "metadata": {
+        "id": "GZpGVrL6ELkd"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\"\"\"\n",
+        "tril = torch.tril(torch.ones(T, T))\n",
+        "wei = torch.zeros((T, T))\n",
+        "wei = wei.masked_fill(tril == 0, float('-inf'))\n",
+        "wei = F.softmax(wei, dim = -1)\n",
+        "xbow3 = wei @ x\n",
+        "torch.allclose(xbow, xbow3)\n"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "zmPYa5QX8QKE",
+        "outputId": "36f51cf0-4e67-4f73-9090-68e5df2cc369"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "True"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 20
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\"\"\"\n",
+        "torch.manual_seed(42)\n",
+        "B,T,C = 4, 8, 32\n",
+        "x = torch.randn(B,T,C)\n",
+        "\n",
+        "head_size = 16\n",
+        "key = nn.Linear(C, head_size, bias = False)\n",
+        "query = nn.Linear(C, head_size, bias = False)\n",
+        "value = nn.Linear(C, head_size, bias = False)\n",
+        "k = key(x) #(B, T, 16)\n",
+        "q = query(x) #(B, T, 16)\n",
+        "wei = q @ k.transpose(-2, -1) #(B, T, 16) @ (B, 16, T) ---> (B, T, T)\n",
+        "\n",
+        "tril = torch.tril(torch.ones(T, T))\n",
+        "wei = wei.masked_fill(tril == 0, float('-inf'))\n",
+        "wei = F.softmax(wei, dim = -1)\n",
+        "v = value(x)\n",
+        "out = wei @ v\n",
+        "\n",
+        "out.shape"
+      ],
+      "metadata": {
+        "id": "Ka3laLyrEfHQ",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "671ba65e-8727-4517-b8d8-897e95c2a486"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "torch.Size([4, 8, 16])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 21
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "'''\n",
+        "wei"
+      ],
+      "metadata": {
+        "id": "0hLoh5rE9NL_"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "class BatchNorm1d:\n",
+        "\n",
+        "  def __init__(self, dim, eps = 1e-5, momentum = 0.1):\n",
+        "    self.eps = eps\n",
+        "    self.gamma = torch.ones(dim)\n",
+        "    self.beta = torch.zeros(dim)\n",
+        "\n",
+        "  def __call__(self, x):\n",
+        "    #calculate the forward pass\n",
+        "    xmean = x.mean(1, keepdim = True) #batch mean\n",
+        "    xvar = x.var(1, keepdim = True) #batch variance\n",
+        "    xhat = (x - xmean) / torch.sqrt(xvar + self.eps)\n",
+        "    self.out = self.gamma * xhat + self.beta\n",
+        "    return self.out\n",
+        "\n",
+        "  def parameters(self):\n",
+        "    return [self.gamma, self.beta]\n",
+        "\n",
+        "torch.manual_seed(42)\n",
+        "module = BatchNorm1d(100)\n",
+        "x = torch.randn(32, 100) #batch size 32 of 100-dimensional vectors\n",
+        "x = module(x)\n",
+        "x.shape"
+      ],
+      "metadata": {
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "id": "xpXvvaqT5zvr",
+        "outputId": "e414cf55-0425-4898-cbad-bd0dee7df7a8"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "torch.Size([32, 100])"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 23
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [],
+      "metadata": {
+        "id": "Z8tii8LB8LQ-"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
